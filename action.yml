@@ -1,0 +1,43 @@
+name: 'Reoclo Run'
+description: 'Execute commands on Reoclo-managed servers'
+branding:
+  icon: 'terminal'
+  color: 'blue'
+inputs:
+  api_key:
+    description: 'Reoclo automation API key'
+    required: true
+  server_id:
+    description: 'Target server ID'
+    required: true
+  command:
+    description: 'Shell command to execute on the server'
+    required: true
+  working_directory:
+    description: 'Working directory on the server'
+    required: false
+  env:
+    description: 'Environment variables as KEY=VALUE pairs, one per line'
+    required: false
+  timeout:
+    description: 'Timeout in seconds (default: 60, max: 900)'
+    required: false
+    default: '60'
+  api_url:
+    description: 'Reoclo API URL (for self-hosted instances)'
+    required: false
+    default: 'https://api.reoclo.com'
+outputs:
+  exit_code:
+    description: 'Command exit code'
+  stdout:
+    description: 'Command stdout (truncated to 64KB)'
+  stderr:
+    description: 'Command stderr (truncated to 64KB)'
+  operation_id:
+    description: 'Reoclo automation operation ID'
+  duration_ms:
+    description: 'Execution duration in milliseconds'
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
