@@ -19,7 +19,7 @@ Reoclo acts as the execution proxy - your GitHub Actions workflow orchestrates t
 
 ## Setup
 
-1. **Create an Automation API key** in the Reoclo dashboard: **Settings > Automation Keys > Create Key**
+1. **Create an Automation API key** in the Reoclo dashboard: navigate to **API Keys**, select the **Automation Keys** tab, and click **Create Key**
 2. Scope the key to specific servers and operations (exec, deploy, restart, reboot)
 3. Add the key as a GitHub Actions secret: `REOCLO_API_KEY`
 4. Add your target server ID as a secret: `REOCLO_SERVER_ID`
