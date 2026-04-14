@@ -36,7 +36,6 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 | `working_directory` | no | - | Working directory on the server |
 | `env` | no | - | Environment variables (KEY=VALUE, one per line) |
 | `timeout` | no | `60` | Timeout in seconds (max 900) |
-| `api_url` | no | `https://api.reoclo.com` | Reoclo API URL (for self-hosted instances) |
 
 ## Outputs
 
@@ -142,19 +141,6 @@ Automation API keys support fine-grained permissions:
 - **IP allowlist**: restrict to specific IP ranges (e.g., GitHub-hosted runner IPs)
 - **Rate limiting**: configurable per-key rate limit (default: 100 req/min)
 - **Expiration**: optional expiry date
-
-## Self-Hosted Reoclo
-
-If you're running a self-hosted Reoclo instance, set the `api_url` input:
-
-```yaml
-- uses: reoclo/run@v1
-  with:
-    api_key: ${{ secrets.REOCLO_API_KEY }}
-    server_id: ${{ secrets.REOCLO_SERVER_ID }}
-    api_url: https://your-reoclo-instance.com
-    command: echo "hello from self-hosted"
-```
 
 ## License
 
