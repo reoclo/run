@@ -1,6 +1,6 @@
 # Reoclo Run (`@reoclo/run`)
 
-Execute commands on [Reoclo](https://reoclo.com)-managed servers from GitHub Actions.
+Execute commands on [Reoclo](https://reoclo.com) managed servers from GitHub Actions.
 
 Reoclo acts as the execution proxy - your GitHub Actions workflow orchestrates the steps, Reoclo dispatches commands to your servers via its runner agent, and every operation is fully audited.
 

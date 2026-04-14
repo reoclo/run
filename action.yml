@@ -1,5 +1,5 @@
 name: 'Reoclo Run'
-description: 'Execute commands on Reoclo-managed servers'
+description: 'Execute commands on Reoclo managed servers'
 branding:
   icon: 'terminal'
   color: 'blue'
