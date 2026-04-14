@@ -2,7 +2,7 @@
   "name": "@reoclo/run",
   "version": "1.0.0",
   "private": true,
-  "description": "Execute commands on Reoclo-managed servers from GitHub Actions",
+  "description": "Execute commands on Reoclo managed servers from GitHub Actions",
   "scripts": {
     "build": "ncc build src/index.ts -o dist --source-map --license licenses.txt",
     "check": "tsc --noEmit",
