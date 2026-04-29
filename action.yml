@@ -20,7 +20,7 @@ inputs:
     description: 'Environment variables as KEY=VALUE pairs, one per line'
     required: false
   timeout:
-    description: 'Timeout in seconds (default: 60, max: 900)'
+    description: 'Timeout in seconds (default 60, max 900)'
     required: false
     default: '60'
   api_url:

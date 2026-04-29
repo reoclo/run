@@ -2,27 +2,40 @@
 
 Execute commands on [Reoclo](https://reoclo.com) managed servers from GitHub Actions.
 
-Reoclo acts as the execution proxy - your GitHub Actions workflow orchestrates the steps, Reoclo dispatches commands to your servers via its runner agent, and every operation is fully audited.
+Reoclo acts as the execution proxy: your GitHub Actions workflow orchestrates the steps, Reoclo dispatches commands to your servers via its runner agent, and every operation is fully audited.
+
+## Why
+
+GitHub-hosted runners cannot reach private servers without copying SSH keys into GitHub Secrets and giving every workflow shell-level access. `@reoclo/run` keeps that out of CI:
+
+- **No SSH keys in GitHub Secrets.** Authentication is a scoped Reoclo automation key, not a server credential.
+- **Per-key access control.** Each key is allowed only the operations and servers you authorize it for.
+- **Full audit trail.** Every command is recorded with the originating repository, workflow, actor, and commit.
+- **Pairs with [`@reoclo/checkout`](https://github.com/reoclo/checkout) and [`@reoclo/docker-auth`](https://github.com/reoclo/docker-auth)** for full deploy workflows.
 
 ## Quick Start
 
 ```yaml
-- name: Deploy on server
-  uses: reoclo/run@v1
-  with:
-    api_key: ${{ secrets.REOCLO_API_KEY }}
-    server_id: ${{ secrets.REOCLO_SERVER_ID }}
-    command: |
-      cd /opt/app && docker compose pull && docker compose up -d
-    timeout: 300
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy on server
+        uses: reoclo/run@v1
+        with:
+          api_key: ${{ secrets.REOCLO_API_KEY }}
+          server_id: ${{ secrets.REOCLO_SERVER_ID }}
+          command: |
+            cd /opt/app && docker compose pull && docker compose up -d
+          timeout: 300
 ```
 
 ## Setup
 
-1. **Create an Automation API key** in the Reoclo dashboard: navigate to **API Keys**, select the **Automation Keys** tab, and click **Create Key**
-2. Scope the key to specific servers and operations (exec, deploy, restart, reboot)
-3. Add the key as a GitHub Actions secret: `REOCLO_API_KEY`
-4. Add your target server ID as a secret: `REOCLO_SERVER_ID`
+1. Create an Automation API key in the Reoclo dashboard. Navigate to **API Keys**, select the **Automation Keys** tab, and click **Create Key**.
+2. Scope the key to specific servers and operations (`exec`, `deploy`, `restart`, `reboot`).
+3. Add the key as a GitHub Actions secret: `REOCLO_API_KEY`.
+4. Add your target server ID as a secret: `REOCLO_SERVER_ID`.
 
 For detailed setup instructions, see the [Reoclo documentation](https://docs.reoclo.com/guides/github-actions).
 
@@ -58,47 +71,46 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
     api_key: ${{ secrets.REOCLO_API_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
     command: |
-      cd /opt/app && docker compose exec -T api python manage.py migrate
-    timeout: 120
+      cd /opt/app && ./scripts/migrate.sh
+    timeout: 600
 ```
 
-### Pass secrets from Bitwarden/1Password
+### Pass secrets from Bitwarden / 1Password
 
 ```yaml
-- name: Fetch secrets
-  uses: bitwarden/sm-action@v2
+- name: Fetch secret from Bitwarden
+  id: bw
+  uses: bitwarden/sm-action@v1
   with:
     access_token: ${{ secrets.BW_ACCESS_TOKEN }}
     secrets: |
-      abc123 > DB_URL
-      def456 > API_SECRET
+      <id> > DB_PASSWORD
 
-- name: Deploy with secrets
+- name: Run with injected env
   uses: reoclo/run@v1
   with:
     api_key: ${{ secrets.REOCLO_API_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
-    command: |
-      docker compose up -d
-    working_directory: /opt/app
     env: |
-      DB_URL=${{ env.DB_URL }}
-      API_SECRET=${{ env.API_SECRET }}
-    timeout: 300
+      DB_PASSWORD=${{ steps.bw.outputs.DB_PASSWORD }}
+    command: psql -c 'SELECT 1'
 ```
 
 ### Build and deploy a Docker image
 
 ```yaml
-- name: Build image on server
-  uses: reoclo/run@v1
+- uses: reoclo/checkout@v1
+  with:
+    api_key: ${{ secrets.REOCLO_API_KEY }}
+    server_id: ${{ secrets.REOCLO_SERVER_ID }}
+
+- uses: reoclo/run@v1
   with:
     api_key: ${{ secrets.REOCLO_API_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
     working_directory: /opt/deploy/workspace
     command: |
-      git pull origin main
-      docker build -t myapp:latest .
+      docker compose build
       docker compose up -d
     timeout: 600
 ```
@@ -106,41 +118,32 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 ### Check command result
 
 ```yaml
-- name: Health check
-  id: health
+- id: deploy
   uses: reoclo/run@v1
   with:
     api_key: ${{ secrets.REOCLO_API_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
-    command: curl -sf http://localhost:3000/health
+    command: ./deploy.sh
 
-- name: Report status
-  if: always()
-  run: |
-    echo "Exit code: ${{ steps.health.outputs.exit_code }}"
-    echo "Output: ${{ steps.health.outputs.stdout }}"
+- if: steps.deploy.outputs.exit_code != '0'
+  run: echo 'deploy failed in ${{ steps.deploy.outputs.duration_ms }}ms'
 ```
 
 ## How It Works
 
-1. Your workflow calls `reoclo/run@v1` with a command
-2. The action sends the command to the Reoclo API (`POST /api/automation/v1/exec`)
-3. Reoclo dispatches the command to the runner agent on your server via WebSocket
-4. The runner executes the command and returns stdout/stderr/exit code
-5. Reoclo logs the full operation for audit (command, result, who triggered it, which workflow)
-6. The action sets outputs so your workflow can use the results
-
-Every operation is correlated to the GitHub Actions run via `run_id` and `run_context`, so you can trace back from the Reoclo audit log to the exact workflow run.
+1. The action posts to `POST /api/automation/v1/exec` with your command, target server, and optional env.
+2. The Reoclo API authenticates the key, checks scopes, and dispatches the command to the target server's runner agent.
+3. The runner executes the command locally and streams stdout / stderr back to the API.
+4. The API returns the exit code, captured stdout / stderr, and an operation ID for audit.
 
 ## API Key Scoping
 
-Automation API keys support fine-grained permissions:
+Each automation API key has two scope dimensions:
 
-- **Server scope**: restrict which servers the key can target
-- **Operation scope**: restrict to specific operations (exec, deploy, restart, reboot)
-- **IP allowlist**: restrict to specific IP ranges (e.g., GitHub-hosted runner IPs)
-- **Rate limiting**: configurable per-key rate limit (default: 100 req/min)
-- **Expiration**: optional expiry date
+- **Allowed Operations.** A subset of `exec`, `deploy`, `restart`, `reboot`, `registry_login`, `registry_logout`. Choose the smallest set the workflow needs.
+- **Allowed Servers.** A list of server IDs the key can target. Use a different key per environment (staging, production) to limit blast radius.
+
+A key with `exec` and a single allowed server ID is the conventional choice for a deploy workflow that uses `@reoclo/run` only.
 
 ## License
 
