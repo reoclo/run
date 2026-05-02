@@ -25705,6 +25705,39 @@ exports.ReocloClient = ReocloClient;
 
 /***/ }),
 
+/***/ 4923:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.buildFailureSummary = buildFailureSummary;
+const FAILURE_TAIL_LINES = 50;
+const NO_OUTPUT_HINT = "Command exited with no stdout or stderr captured. Likely causes: " +
+    "working_directory does not exist on the server, or the runner could " +
+    "not start the process. Verify the working_directory and command.";
+/**
+ * Pick the most useful failure context to surface in the GitHub Action's
+ * single error annotation when a command fails.
+ *
+ * Priority: stderr tail > stdout tail > diagnostic hint. The hint case
+ * usually indicates a runner-side issue (bad working_directory, spawn
+ * failure) — older runners returned empty streams there with no clue.
+ */
+function buildFailureSummary(stdout, stderr) {
+    if (stderr) {
+        return stderr.split("\n").slice(-FAILURE_TAIL_LINES).join("\n");
+    }
+    if (stdout) {
+        const tail = stdout.split("\n").slice(-FAILURE_TAIL_LINES).join("\n");
+        return `Command failed but stderr was empty. Last lines of stdout:\n${tail}`;
+    }
+    return NO_OUTPUT_HINT;
+}
+
+
+/***/ }),
+
 /***/ 6866:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -25746,6 +25779,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(6966));
 const client_js_1 = __nccwpck_require__(8039);
+const format_js_1 = __nccwpck_require__(4923);
 function parseEnvInput(envInput) {
     if (!envInput.trim())
         return undefined;
@@ -25775,6 +25809,25 @@ function buildRunContext() {
         ref: process.env["GITHUB_REF"],
     };
 }
+function emitResult(stdout, stderr, exitCode) {
+    if (stdout) {
+        core.startGroup("stdout");
+        core.info(stdout);
+        core.endGroup();
+    }
+    if (stderr) {
+        core.startGroup("stderr");
+        core.info(stderr);
+        core.endGroup();
+    }
+    if (exitCode === 0)
+        return;
+    // On failure, surface a single error annotation so the reason is visible in
+    // the collapsed step view and the failure summary — not buried inside an
+    // expanded group.
+    core.error((0, format_js_1.buildFailureSummary)(stdout, stderr));
+    core.setFailed(`Command exited with code ${exitCode}`);
+}
 async function run() {
     try {
         const apiKey = core.getInput("api_key", { required: true });
@@ -25798,17 +25851,14 @@ async function run() {
         const response = await client.execCommand(request);
         core.setOutput("operation_id", response.operation_id);
         if (response.status === "completed" || response.status === "failed" || response.status === "timeout") {
-            core.setOutput("exit_code", String(response.exit_code ?? 1));
-            core.setOutput("stdout", response.stdout ?? "");
-            core.setOutput("stderr", response.stderr ?? "");
+            const exitCode = response.exit_code ?? 1;
+            const stdout = response.stdout ?? "";
+            const stderr = response.stderr ?? "";
+            core.setOutput("exit_code", String(exitCode));
+            core.setOutput("stdout", stdout);
+            core.setOutput("stderr", stderr);
             core.setOutput("duration_ms", String(response.duration_ms ?? 0));
-            if (response.stdout)
-                core.info(response.stdout);
-            if (response.stderr)
-                core.warning(response.stderr);
-            if (response.exit_code !== 0) {
-                core.setFailed(`Command exited with code ${response.exit_code}`);
-            }
+            emitResult(stdout, stderr, exitCode);
             return;
         }
         // Async path: poll until complete
@@ -25818,17 +25868,13 @@ async function run() {
         });
         const result = detail.result ?? {};
         const exitCode = result.exit_code ?? 1;
+        const stdout = result.stdout ?? "";
+        const stderr = result.stderr ?? "";
         core.setOutput("exit_code", String(exitCode));
-        core.setOutput("stdout", result.stdout ?? "");
-        core.setOutput("stderr", result.stderr ?? "");
+        core.setOutput("stdout", stdout);
+        core.setOutput("stderr", stderr);
         core.setOutput("duration_ms", String(result.duration_ms ?? 0));
-        if (result.stdout)
-            core.info(result.stdout);
-        if (result.stderr)
-            core.warning(result.stderr);
-        if (exitCode !== 0) {
-            core.setFailed(`Command exited with code ${exitCode}`);
-        }
+        emitResult(stdout, stderr, exitCode);
     }
     catch (error) {
         const message = error instanceof Error ? error.message : String(error);

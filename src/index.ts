@@ -1,5 +1,6 @@
 import * as core from "@actions/core";
 import { ReocloClient } from "./client.js";
+import { buildFailureSummary } from "./format.js";
 import type { ExecRequest, RunContext } from "./types.js";
 
 function parseEnvInput(envInput: string): Record<string, string> | undefined {
@@ -27,6 +28,27 @@ function buildRunContext(): RunContext {
     sha: process.env["GITHUB_SHA"],
     ref: process.env["GITHUB_REF"],
   };
+}
+
+function emitResult(stdout: string, stderr: string, exitCode: number): void {
+  if (stdout) {
+    core.startGroup("stdout");
+    core.info(stdout);
+    core.endGroup();
+  }
+  if (stderr) {
+    core.startGroup("stderr");
+    core.info(stderr);
+    core.endGroup();
+  }
+
+  if (exitCode === 0) return;
+
+  // On failure, surface a single error annotation so the reason is visible in
+  // the collapsed step view and the failure summary — not buried inside an
+  // expanded group.
+  core.error(buildFailureSummary(stdout, stderr));
+  core.setFailed(`Command exited with code ${exitCode}`);
 }
 
 async function run(): Promise<void> {
@@ -57,17 +79,14 @@ async function run(): Promise<void> {
     core.setOutput("operation_id", response.operation_id);
 
     if (response.status === "completed" || response.status === "failed" || response.status === "timeout") {
-      core.setOutput("exit_code", String(response.exit_code ?? 1));
-      core.setOutput("stdout", response.stdout ?? "");
-      core.setOutput("stderr", response.stderr ?? "");
+      const exitCode = response.exit_code ?? 1;
+      const stdout = response.stdout ?? "";
+      const stderr = response.stderr ?? "";
+      core.setOutput("exit_code", String(exitCode));
+      core.setOutput("stdout", stdout);
+      core.setOutput("stderr", stderr);
       core.setOutput("duration_ms", String(response.duration_ms ?? 0));
-
-      if (response.stdout) core.info(response.stdout);
-      if (response.stderr) core.warning(response.stderr);
-
-      if (response.exit_code !== 0) {
-        core.setFailed(`Command exited with code ${response.exit_code}`);
-      }
+      emitResult(stdout, stderr, exitCode);
       return;
     }
 
@@ -80,18 +99,14 @@ async function run(): Promise<void> {
 
     const result = detail.result ?? {};
     const exitCode = result.exit_code ?? 1;
+    const stdout = result.stdout ?? "";
+    const stderr = result.stderr ?? "";
 
     core.setOutput("exit_code", String(exitCode));
-    core.setOutput("stdout", result.stdout ?? "");
-    core.setOutput("stderr", result.stderr ?? "");
+    core.setOutput("stdout", stdout);
+    core.setOutput("stderr", stderr);
     core.setOutput("duration_ms", String(result.duration_ms ?? 0));
-
-    if (result.stdout) core.info(result.stdout);
-    if (result.stderr) core.warning(result.stderr);
-
-    if (exitCode !== 0) {
-      core.setFailed(`Command exited with code ${exitCode}`);
-    }
+    emitResult(stdout, stderr, exitCode);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     core.setFailed(`Action failed: ${message}`);
