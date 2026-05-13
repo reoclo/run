@@ -39,5 +39,5 @@ outputs:
   duration_ms:
     description: 'Execution duration in milliseconds'
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'dist/index.js'
