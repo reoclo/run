@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy on server
-        uses: reoclo/run@v1
+        uses: reoclo/run@v2
         with:
           api_key: ${{ secrets.REOCLO_API_KEY }}
           server_id: ${{ secrets.REOCLO_SERVER_ID }}
@@ -49,6 +49,7 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 | `working_directory` | no | - | Working directory on the server |
 | `env` | no | - | Environment variables (KEY=VALUE, one per line) |
 | `timeout` | no | `60` | Timeout in seconds (max 900) |
+| `api_url` | no | `https://api.reoclo.com` | Reoclo API URL (for self-hosted instances) |
 
 ## Outputs
 
@@ -66,7 +67,7 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 
 ```yaml
 - name: Run database migration
-  uses: reoclo/run@v1
+  uses: reoclo/run@v2
   with:
     api_key: ${{ secrets.REOCLO_API_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
@@ -87,7 +88,7 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
       <id> > DB_PASSWORD
 
 - name: Run with injected env
-  uses: reoclo/run@v1
+  uses: reoclo/run@v2
   with:
     api_key: ${{ secrets.REOCLO_API_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
@@ -99,12 +100,12 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 ### Build and deploy a Docker image
 
 ```yaml
-- uses: reoclo/checkout@v1
+- uses: reoclo/checkout@v2
   with:
     api_key: ${{ secrets.REOCLO_API_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
 
-- uses: reoclo/run@v1
+- uses: reoclo/run@v2
   with:
     api_key: ${{ secrets.REOCLO_API_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
@@ -119,7 +120,7 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 
 ```yaml
 - id: deploy
-  uses: reoclo/run@v1
+  uses: reoclo/run@v2
   with:
     api_key: ${{ secrets.REOCLO_API_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
@@ -131,10 +132,19 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 
 ## How It Works
 
-1. The action posts to `POST /api/automation/v1/exec` with your command, target server, and optional env.
-2. The Reoclo API authenticates the key, checks scopes, and dispatches the command to the target server's runner agent.
-3. The runner executes the command locally and streams stdout / stderr back to the API.
-4. The API returns the exit code, captured stdout / stderr, and an operation ID for audit.
+`v2` is a thin wrapper around the [`reoclo` CLI](https://github.com/reoclo/cli) (the same
+engine that powers Gitea Actions and Woodpecker), so behaviour is identical across CI systems:
+
+1. A composite step installs the pinned `reoclo` CLI (downloaded once per job; no Node runtime needed).
+2. It runs `reoclo exec <server_id> … --output json` with `REOCLO_AUTOMATION_KEY` from `api_key`.
+3. The CLI calls the Reoclo automation API, which dispatches the command to the target server's
+   runner agent and streams stdout / stderr back.
+4. The CLI exits with the remote command's exit code, so the step fails naturally when the command fails.
+5. stdout, stderr, exit_code, operation_id, and duration_ms are parsed from the JSON output and
+   mapped to this action's outputs.
+
+`jq` is used to parse the CLI's JSON output; it is preinstalled on GitHub-hosted and standard
+Gitea `act_runner` images.
 
 ## API Key Scoping
 
@@ -144,6 +154,19 @@ Each automation API key has two scope dimensions:
 - **Allowed Servers.** A list of server IDs the key can target. Use a different key per environment (staging, production) to limit blast radius.
 
 A key with `exec` and a single allowed server ID is the conventional choice for a deploy workflow that uses `@reoclo/run` only.
+
+## Gitea Actions
+
+The repo is mirrored to `git.boxpositron.dev/reoclo/run`, so the same action runs on a
+self-hosted Gitea `act_runner`:
+
+```yaml
+- uses: git.boxpositron.dev/reoclo/run@v2
+  with:
+    api_key: ${{ secrets.REOCLO_API_KEY }}
+    server_id: ${{ secrets.REOCLO_SERVER_ID }}
+    command: ./deploy.sh
+```
 
 ## License
 
