@@ -1,5 +1,10 @@
 # Reoclo Run (`@reoclo/run`)
 
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Reoclo%20Run-2188ff?logo=github&logoColor=white)](https://github.com/marketplace/actions/reoclo-run)
+[![Release](https://img.shields.io/github/v/release/reoclo/run?logo=github&label=release&color=2188ff&sort=semver)](https://github.com/reoclo/run/releases/latest)
+[![CI](https://github.com/reoclo/run/actions/workflows/ci.yml/badge.svg)](https://github.com/reoclo/run/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+
 Execute commands on [Reoclo](https://reoclo.com) managed servers from GitHub Actions.
 
 Reoclo acts as the execution proxy: your GitHub Actions workflow orchestrates the steps, Reoclo dispatches commands to your servers via its runner agent, and every operation is fully audited.
