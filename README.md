@@ -28,7 +28,7 @@ jobs:
       - name: Deploy on server
         uses: reoclo/run@v2
         with:
-          api_key: ${{ secrets.REOCLO_API_KEY }}
+          api_key: ${{ secrets.REOCLO_AUTOMATION_KEY }}
           server_id: ${{ secrets.REOCLO_SERVER_ID }}
           command: |
             cd /opt/app && docker compose pull && docker compose up -d
@@ -39,8 +39,10 @@ jobs:
 
 1. Create an Automation API key in the Reoclo dashboard. Navigate to **API Keys**, select the **Automation Keys** tab, and click **Create Key**.
 2. Scope the key to specific servers and operations (`exec`, `deploy`, `restart`, `reboot`).
-3. Add the key as a GitHub Actions secret: `REOCLO_API_KEY`.
+3. Add the key as a GitHub Actions secret: `REOCLO_AUTOMATION_KEY`.
 4. Add your target server ID as a secret: `REOCLO_SERVER_ID`.
+
+If your repository already has a secret named `REOCLO_API_KEY`, keep it and pass it to `api_key`. The action provides `REOCLO_AUTOMATION_KEY` to the CLI.
 
 For detailed setup instructions, see the [Reoclo documentation](https://docs.reoclo.com/guides/github-actions).
 
@@ -74,7 +76,7 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 - name: Run database migration
   uses: reoclo/run@v2
   with:
-    api_key: ${{ secrets.REOCLO_API_KEY }}
+    api_key: ${{ secrets.REOCLO_AUTOMATION_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
     command: |
       cd /opt/app && ./scripts/migrate.sh
@@ -95,7 +97,7 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 - name: Run with injected env
   uses: reoclo/run@v2
   with:
-    api_key: ${{ secrets.REOCLO_API_KEY }}
+    api_key: ${{ secrets.REOCLO_AUTOMATION_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
     env: |
       DB_PASSWORD=${{ steps.bw.outputs.DB_PASSWORD }}
@@ -107,12 +109,12 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 ```yaml
 - uses: reoclo/checkout@v2
   with:
-    api_key: ${{ secrets.REOCLO_API_KEY }}
+    api_key: ${{ secrets.REOCLO_AUTOMATION_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
 
 - uses: reoclo/run@v2
   with:
-    api_key: ${{ secrets.REOCLO_API_KEY }}
+    api_key: ${{ secrets.REOCLO_AUTOMATION_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
     working_directory: /opt/deploy/workspace
     command: |
@@ -127,7 +129,7 @@ For detailed setup instructions, see the [Reoclo documentation](https://docs.reo
 - id: deploy
   uses: reoclo/run@v2
   with:
-    api_key: ${{ secrets.REOCLO_API_KEY }}
+    api_key: ${{ secrets.REOCLO_AUTOMATION_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
     command: ./deploy.sh
 
@@ -168,7 +170,7 @@ self-hosted Gitea `act_runner`:
 ```yaml
 - uses: git.boxpositron.dev/reoclo/run@v2
   with:
-    api_key: ${{ secrets.REOCLO_API_KEY }}
+    api_key: ${{ secrets.REOCLO_AUTOMATION_KEY }}
     server_id: ${{ secrets.REOCLO_SERVER_ID }}
     command: ./deploy.sh
 ```
