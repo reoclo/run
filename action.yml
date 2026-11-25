@@ -84,7 +84,12 @@ runs:
         IN_TIMEOUT: ${{ inputs.timeout }}
       run: |
         set -euo pipefail
-        args=(exec "$IN_SERVER_ID" --output json)
+        # `command` is a shell script, and the runner runs what it receives as
+        # `sh -c <command>`. From reoclo CLI v0.122.0, exec quotes each argument
+        # (argv semantics), so a script passed as one argument would reach the
+        # server as a single quoted word and exit 127. --shell sh sends it as
+        # `sh -c '<script>'`, the same sh the script ran in before.
+        args=(exec "$IN_SERVER_ID" --output json --shell sh)
         if [ -n "$IN_TIMEOUT" ]; then args+=(--timeout "$IN_TIMEOUT"); fi
         if [ -n "$IN_CWD" ]; then args+=(--cwd "$IN_CWD"); fi
         if [ -n "$IN_ENV" ]; then
