@@ -95,10 +95,28 @@ runs:
           done <<< "$IN_ENV"
         fi
         args+=(-- "$IN_COMMAND")
+        # Run the CLI as a background job and forward a stop signal to it. A
+        # cancelled job signals this shell; with the CLI in the foreground of a
+        # command substitution the shell dies on the signal and leaves the CLI,
+        # and the command it runs on the server, behind. The CLI cancels its
+        # remote command when it gets SIGTERM. Always TERM: a background job of a
+        # non-interactive shell ignores SIGINT.
+        out_file="$(mktemp)"
         set +e
-        out="$(reoclo "${args[@]}")"
+        reoclo "${args[@]}" > "$out_file" &
+        cli_pid=$!
+        trap 'kill -TERM "$cli_pid" 2>/dev/null' TERM INT HUP
+        wait "$cli_pid"
         rc=$?
+        # A trapped signal ends `wait` early while the CLI is still cancelling.
+        while kill -0 "$cli_pid" 2>/dev/null; do
+          wait "$cli_pid"
+          rc=$?
+        done
+        trap - TERM INT HUP
         set -e
+        out="$(cat "$out_file")"
+        rm -f "$out_file"
         echo "exit_code=$(printf '%s' "$out" | jq -r '.exit_code')" >> "$GITHUB_OUTPUT"
         d="ghaEOF_${RANDOM}_${RANDOM}"
         { echo "stdout<<$d"; printf '%s' "$out" | jq -r '.stdout'; echo "$d"; } >> "$GITHUB_OUTPUT"
