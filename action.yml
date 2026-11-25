@@ -49,11 +49,11 @@ runs:
     - name: Ensure reoclo CLI
       shell: bash
       env:
-        REOCLO_PIN: v0.44.3
+        REOCLO_PIN: v0.122.0
         # SHA-256 of the pinned release's install.sh (stable across releases). The
         # installer then verifies the downloaded binary against SHA256SUMS, so this
         # gives a tamper-evident chain: pinned hash -> installer -> binary.
-        REOCLO_INSTALL_SHA256: 692546fb8583ba743c5ab462ee3a8dc6dd40836cf8e7bbf0f80e000eac042be9
+        REOCLO_INSTALL_SHA256: 06daed87bc24c64bc5f7104d356aa6ebc86716c50beba94628591c7d20f0d58a
       run: |
         set -euo pipefail
         want="${REOCLO_PIN#v}"
@@ -95,10 +95,28 @@ runs:
           done <<< "$IN_ENV"
         fi
         args+=(-- "$IN_COMMAND")
+        # Run the CLI as a background job and forward a stop signal to it. A
+        # cancelled job signals this shell; with the CLI in the foreground of a
+        # command substitution the shell dies on the signal and leaves the CLI,
+        # and the command it runs on the server, behind. The CLI cancels its
+        # remote command when it gets SIGTERM. Always TERM: a background job of a
+        # non-interactive shell ignores SIGINT.
+        out_file="$(mktemp)"
         set +e
-        out="$(reoclo "${args[@]}")"
+        reoclo "${args[@]}" > "$out_file" &
+        cli_pid=$!
+        trap 'kill -TERM "$cli_pid" 2>/dev/null' TERM INT HUP
+        wait "$cli_pid"
         rc=$?
+        # A trapped signal ends `wait` early while the CLI is still cancelling.
+        while kill -0 "$cli_pid" 2>/dev/null; do
+          wait "$cli_pid"
+          rc=$?
+        done
+        trap - TERM INT HUP
         set -e
+        out="$(cat "$out_file")"
+        rm -f "$out_file"
         echo "exit_code=$(printf '%s' "$out" | jq -r '.exit_code')" >> "$GITHUB_OUTPUT"
         d="ghaEOF_${RANDOM}_${RANDOM}"
         { echo "stdout<<$d"; printf '%s' "$out" | jq -r '.stdout'; echo "$d"; } >> "$GITHUB_OUTPUT"
