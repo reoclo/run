@@ -33,3 +33,46 @@ jobs:
         run: |
           test "${{ steps.act.outcome }}" = "failure" \
             || { echo "expected the action to fail on the dummy key (reached auth)"; exit 1; }
+
+  # Regression guard for how the command reaches the CLI. v2.0.5 passed the
+  # script as a plain argument, which CLI v0.122.0 quotes as one word, so every
+  # multi-word command exited 127 on the server. A fake reoclo at the pinned
+  # version records its argv; the script must arrive whole, after --shell sh.
+  command-args:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: put a fake reoclo that records its arguments on PATH
+        run: |
+          mkdir -p "$RUNNER_TEMP/fake"
+          cat > "$RUNNER_TEMP/fake/reoclo" <<'EOF'
+          #!/usr/bin/env bash
+          if [ "${1:-}" = "--version" ]; then echo "$FAKE_REOCLO_VERSION"; exit 0; fi
+          printf '%s\0' "$@" > "$RUNNER_TEMP/fake/argv"
+          printf '{"exit_code":0,"stdout":"ok","stderr":"","operation_id":"op","duration_ms":1}'
+          EOF
+          chmod +x "$RUNNER_TEMP/fake/reoclo"
+          echo "$RUNNER_TEMP/fake" >> "$GITHUB_PATH"
+          echo "FAKE_REOCLO_VERSION=$(sed -n 's/^ *REOCLO_PIN: v//p' action.yml)" >> "$GITHUB_ENV"
+
+      - name: run the action with a multi-line script
+        uses: ./
+        with:
+          api_key: dummy-not-an-rca-key
+          server_id: 00000000-0000-0000-0000-000000000000
+          command: |
+            set -eu
+            echo "a b" | wc -w
+
+      - name: the script reaches the CLI as one argument after --shell sh
+        run: |
+          python3 - "$RUNNER_TEMP/fake/argv" <<'PY'
+          import sys
+          argv = open(sys.argv[1], "rb").read().decode().split("\0")[:-1]
+          print(argv)
+          i = argv.index("--shell")
+          assert argv[i + 1] == "sh", argv
+          assert argv[-2] == "--", argv
+          assert argv[-1].rstrip("\n") == 'set -eu\necho "a b" | wc -w', argv
+          PY
